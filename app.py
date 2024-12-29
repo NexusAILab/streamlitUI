@@ -269,7 +269,6 @@ uploaded_file = st.file_uploader(
 
 # Add this function near the top of your file after imports
 def get_session_cookie():
-    # Add JavaScript to get the cookie and store it in a div
     components.html("""
         <div id="session-id-container" style="display: none;"></div>
         <script>
@@ -281,18 +280,17 @@ def get_session_cookie():
             }
             
             const sessionId = getCookie('session_id');
-            document.getElementById('session-id-container').innerText = sessionId;
             
             // Send the session ID to Streamlit
             window.parent.postMessage({
-                type: 'session_id',
-                value: sessionId
+                type: 'streamlit:message',
+                data: {
+                    type: 'session_id',
+                    value: sessionId
+                }
             }, '*');
         </script>
     """, height=0)
-    
-    # Return an empty string as fallback
-    return ''
 
 # Add this function to check if captcha needs to be shown
 def needs_captcha_verification():
@@ -356,6 +354,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Call get_session_cookie() before the chat interface
+get_session_cookie()
+
 # Modify the chat input section (replace the existing if prompt block)
 if prompt := st.chat_input("What would you like to know?"):
     # If there's a file, combine file content with the prompt
@@ -386,7 +387,7 @@ if prompt := st.chat_input("What would you like to know?"):
                 "temperature": 0.7,
                 "stream": True,
                 "turnstile_token": st.session_state.get("turnstile_token", ""),
-                "session": st.session_state.session_id  # Use the stored session ID
+                "session": st.session_state.session_id  # Make sure to include the session ID
             }
             
             # Make streaming request
