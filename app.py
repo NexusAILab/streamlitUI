@@ -109,7 +109,7 @@ with st.sidebar:
     with st.container():
         model = st.selectbox(
             "Select Model",
-            ["deepseek-chat", "gpt-4o"],
+            ["llama-3.3-70b", "llama-3.2-90b", "llama-3.1-405B", "deepseek-chat", "gpt-4o"],
             help="Choose the AI model for your conversation"
         )
 
