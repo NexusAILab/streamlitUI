@@ -7,7 +7,6 @@ import io
 import pandas as pd
 import docx2txt
 import PyPDF2
-import streamlit.components.v1 as components
 
 # Replace OpenAI configs with base URL and API key constants
 BASE_URL = "https://helixmind.online/v1/chat/completions"
@@ -16,75 +15,11 @@ API_KEY = "helix-fdgumg4STWpGELyU66c_Cki6emi3wzpZCzssEhmDtl0"
 # Page config
 st.set_page_config(page_title="Nexus ChatGPT", layout="wide")
 
-# Add JavaScript for local storage interaction
-def init_local_storage():
-    components.html(
-        """
-        <script>
-            // Function to save chat history
-            const saveChatHistory = (history) => {
-                localStorage.setItem('chat_history', JSON.stringify(history));
-            };
-
-            // Function to load chat history
-            const loadChatHistory = () => {
-                const history = localStorage.getItem('chat_history');
-                return history ? JSON.parse(history) : [];
-            };
-
-            // Make functions available to Python
-            window.saveChatToLocalStorage = saveChatHistory;
-            window.loadChatFromLocalStorage = loadChatHistory;
-        </script>
-        """,
-        height=0,
-    )
-
-# Call this after page config
-init_local_storage()
-
 # Initialize session states
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-
-# Add JavaScript to load and set chat history on page load
-components.html(
-    """
-    <script>
-        function loadAndSetHistory() {
-            const history = localStorage.getItem('chat_history');
-            if (history) {
-                const parsedHistory = JSON.parse(history);
-                window.parent.Streamlit.setComponentValue(parsedHistory);
-            }
-        }
-        loadAndSetHistory();
-    </script>
-    """,
-    height=0
-)
-
-# Add event handler for receiving chat history
-components.html(
-    """
-    <script>
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'streamlit:set_chat_history') {
-                const history = event.data.history;
-                if (history) {
-                    window.parent.postMessage({
-                        type: 'streamlit:setComponentValue',
-                        value: history
-                    }, '*');
-                }
-            }
-        });
-    </script>
-    """,
-    height=0
-)
 
 # System prompt
 SYSTEM_PROMPT = """You are a helpful AI assistant. You aim to give accurate, informative responses while being direct and concise. For mathematical or technical topics, you provide clear explanations with examples when helpful."""
@@ -106,8 +41,10 @@ with st.sidebar:
 
     # New chat button
     if st.button("New Chat"):
+        # Save current chat to history if it exists
         if st.session_state.messages:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Get the first user message for preview, defaulting to "New Chat" if none exists
             preview = "New Chat"
             for msg in st.session_state.messages:
                 if msg['role'] == 'user':
@@ -119,17 +56,7 @@ with st.sidebar:
                 "preview": preview,
                 "messages": st.session_state.messages.copy()
             })
-            
-            # Save to local storage using JavaScript
-            components.html(
-                f"""
-                <script>
-                    localStorage.setItem('chat_history', JSON.stringify({json.dumps(st.session_state.chat_history)}));
-                </script>
-                """,
-                height=0
-            )
-        
+        # Clear current messages
         st.session_state.messages = []
         st.rerun()
 
