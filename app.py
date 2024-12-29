@@ -78,75 +78,40 @@ def turnstile_widget():
         <div class="cf-turnstile" data-sitekey="0x4AAAAAAAzRsaZd0P9-qFot" data-callback="onTurnstileSuccess"></div>
         <script>
         function onTurnstileSuccess(token) {
-            window.parent.postMessage({
-                type: 'turnstile-token',
-                token: token
-            }, '*');
-        }
-        window.onload = function() {
-            turnstile.ready(function() {
-                turnstile.render('.cf-turnstile');
-            });
+            // Store token in sessionStorage
+            sessionStorage.setItem('turnstile_token', token);
+            // Set verification status in URL and reload
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.set('turnstile_verified', 'true');
+            window.location.search = searchParams.toString();
         }
         </script>
         """,
         height=100
     )
 
-# Add this new function to handle frontend messages
-def handle_turnstile_callback():
-    components.html(
-        """
-        <script>
-        window.addEventListener('message', function(e) {
-            if (e.data.type === 'turnstile-token') {
-                // Store token in sessionStorage
-                sessionStorage.setItem('turnstile_token', e.data.token);
-                // Reload the page
-                window.location.reload();
-            }
-        });
-        </script>
-        """,
-        height=0
-    )
-
 # Modify the handle_turnstile_verification function
 def handle_turnstile_verification():
-    # Check if we have a token in session state
+    # Debug output
+    st.write("Debug - Session state:", st.session_state.get('turnstile_verified'))
+    st.write("Debug - Query params:", st.query_params)
+    
+    # Check if already verified
     if st.session_state.get('turnstile_verified'):
         return True
-    
-    # Add JavaScript to check for token in sessionStorage
-    components.html(
-        """
-        <script>
-        const token = sessionStorage.getItem('turnstile_token');
-        if (token) {
-            // Clear the token
-            sessionStorage.removeItem('turnstile_token');
-            // Set verification status in URL
-            const searchParams = new URLSearchParams(window.location.search);
-            searchParams.set('turnstile_verified', 'true');
-            const newRelativePathQuery = window.location.pathname + '?' + searchParams.toString();
-            history.pushState(null, '', newRelativePathQuery);
-            // Reload the page
-            window.location.reload();
-        }
-        </script>
-        """,
-        height=0
-    )
     
     # Check URL parameters for verification status
     if st.query_params.get('turnstile_verified') == 'true':
         st.session_state.turnstile_verified = True
+        # Remove the query parameter to clean up the URL
+        params = st.query_params.to_dict()
+        params.pop('turnstile_verified', None)
+        st.query_params.update(params)
         return True
     
     # Show verification widget if not verified
     st.write("Please complete the verification below:")
     turnstile_widget()
-    handle_turnstile_callback()
     return False
 
 def process_content(content):
