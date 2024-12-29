@@ -82,10 +82,6 @@ def turnstile_widget():
                 type: 'turnstile-token',
                 token: token
             }, '*');
-            
-            setTimeout(function() {
-                window.location.reload();
-            }, 1000);
         }
         window.onload = function() {
             turnstile.ready(function() {
@@ -97,11 +93,42 @@ def turnstile_widget():
         height=100
     )
 
-# Now define handle_turnstile_verification
+# Add this new function to handle frontend messages
+def handle_turnstile_callback():
+    components.html(
+        """
+        <script>
+        window.addEventListener('message', function(e) {
+            if (e.data.type === 'turnstile-token') {
+                // Use Streamlit's setQueryParam to persist the verification
+                const searchParams = new URLSearchParams(window.location.search);
+                searchParams.set('turnstile_verified', 'true');
+                const newRelativePathQuery = window.location.pathname + '?' + searchParams.toString();
+                history.pushState(null, '', newRelativePathQuery);
+                
+                // Reload only if not already verified
+                if (!searchParams.has('turnstile_verified')) {
+                    window.location.reload();
+                }
+            }
+        });
+        </script>
+        """,
+        height=0
+    )
+
+# Modify the handle_turnstile_verification function
 def handle_turnstile_verification():
+    # Check URL parameters for verification status
+    params = st.experimental_get_query_params()
+    if params.get('turnstile_verified') == ['true']:
+        st.session_state.turnstile_verified = True
+        return True
+    
     if not st.session_state.turnstile_verified:
         st.write("Please complete the verification below:")
         turnstile_widget()
+        handle_turnstile_callback()  # Add this line
         return False
     return True
 
