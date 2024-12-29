@@ -98,6 +98,8 @@ if "last_captcha_time" not in st.session_state:
     st.session_state.last_captcha_time = 0
 if "captcha_verified" not in st.session_state:
     st.session_state.captcha_verified = False
+if "session_id" not in st.session_state:
+    st.session_state.session_id = ""
 
 # System prompt
 SYSTEM_PROMPT = """You are a helpful AI assistant. You aim to give accurate, informative responses while being direct and concise."""
@@ -267,11 +269,30 @@ uploaded_file = st.file_uploader(
 
 # Add this function near the top of your file after imports
 def get_session_cookie():
-    try:
-        return st.query_params.get('session_id', '')
-    except Exception as e:
-        st.warning(f"Session cookie error: {str(e)}")
-        return ''
+    # Add JavaScript to get the cookie and store it in a div
+    components.html("""
+        <div id="session-id-container" style="display: none;"></div>
+        <script>
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+                return '';
+            }
+            
+            const sessionId = getCookie('session_id');
+            document.getElementById('session-id-container').innerText = sessionId;
+            
+            // Send the session ID to Streamlit
+            window.parent.postMessage({
+                type: 'session_id',
+                value: sessionId
+            }, '*');
+        </script>
+    """, height=0)
+    
+    # Return an empty string as fallback
+    return ''
 
 # Add this function to check if captcha needs to be shown
 def needs_captcha_verification():
@@ -365,7 +386,7 @@ if prompt := st.chat_input("What would you like to know?"):
                 "temperature": 0.7,
                 "stream": True,
                 "turnstile_token": st.session_state.get("turnstile_token", ""),
-                "session": get_session_cookie()
+                "session": st.session_state.session_id  # Use the stored session ID
             }
             
             # Make streaming request
