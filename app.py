@@ -119,16 +119,15 @@ def handle_turnstile_callback():
 
 # Modify the handle_turnstile_verification function
 def handle_turnstile_verification():
-    # Check URL parameters for verification status
-    params = st.experimental_get_query_params()
-    if params.get('turnstile_verified') == ['true']:
+    # Check URL parameters for verification status using st.query_params
+    if st.query_params.get('turnstile_verified') == 'true':
         st.session_state.turnstile_verified = True
         return True
     
     if not st.session_state.turnstile_verified:
         st.write("Please complete the verification below:")
         turnstile_widget()
-        handle_turnstile_callback()  # Add this line
+        handle_turnstile_callback()
         return False
     return True
 
@@ -136,8 +135,79 @@ def handle_turnstile_verification():
 st.title("Nexus ChatGPT")
 
 # Show Turnstile verification before chat interface
-if not handle_turnstile_verification():
-    st.stop()  # Stop execution until verification is complete
+if handle_turnstile_verification():
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            process_content(message["content"])
+
+    # Add file uploader with size warning
+    uploaded_file = st.file_uploader("Upload a file (PDF, TXT, DOCX, CSV, etc.) - Max 10 MB", type=['txt', 'pdf', 'docx', 'csv'])
+
+    # Chat input
+    if prompt := st.chat_input("What would you like to know?"):
+        # Handle the chat input
+        if uploaded_file is not None:
+            file_content = process_file_content(uploaded_file)
+            prompt = f"{prompt}\n\n{file_content}"
+        
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {API_KEY}"
+                }
+                
+                data = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        *[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                    ],
+                    "temperature": 0.7,
+                    "stream": True,
+                    "turnstile": st.session_state.get('turnstile_token', ''),
+                    "session": get_session_cookie()  
+                }
+                
+                # Make streaming request
+                response = requests.post(
+                    BASE_URL,
+                    headers=headers,
+                    json=data,
+                    stream=True
+                )
+                
+                for line in response.iter_lines():
+                    if line:
+                        # Remove "data: " prefix and parse JSON
+                        line = line.decode('utf-8')
+                        if line.startswith("data: "):
+                            line = line[6:]  # Remove "data: " prefix
+                        if line != "[DONE]":
+                            try:
+                                json_object = json.loads(line)
+                                content = json_object['choices'][0]['delta'].get('content', '')
+                                full_response += content
+                                # Process math in streaming response
+                                message_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
+                            except json.JSONDecodeError:
+                                continue
+                
+                message_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+else:
+    st.stop()
 
 def clean_math_expression(expr):
     # Replace [...] line breaks with actual line breaks
@@ -220,14 +290,6 @@ def process_file_content(uploaded_file):
     except Exception as e:
         return f"Error processing file: {str(e)}"
 
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        process_content(message["content"])
-
-# Add file uploader with size warning
-uploaded_file = st.file_uploader("Upload a file (PDF, TXT, DOCX, CSV, etc.) - Max 10 MB", type=['txt', 'pdf', 'docx', 'csv'])
-
 # Add this function to verify the token with the backend
 def verify_turnstile_token(token):
     try:
@@ -249,76 +311,10 @@ def verify_turnstile_token(token):
 # Add this function near the top of your file after imports
 def get_session_cookie():
     try:
-        cookies = st.experimental_get_query_params()
-        return cookies.get('session_id', [''])[0]
+        return st.query_params.get('session_id', '')
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
         return ''
-
-# Modify the chat input section (replace the existing if prompt block)
-if prompt := st.chat_input("What would you like to know?"):
-    # Handle the chat input only if Turnstile is verified
-    if st.session_state.turnstile_verified:
-        # If there's a file, combine file content with the prompt
-        if uploaded_file is not None:
-            file_content = process_file_content(uploaded_file)
-            prompt = f"{prompt}\n\n{file_content}"
-        
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
-
-        with st.chat_message("assistant"):
-            message_placeholder = st.empty()
-            full_response = ""
-            
-            try:
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {API_KEY}"
-                }
-                
-                data = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        *[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                    ],
-                    "temperature": 0.7,
-                    "stream": True,
-                    "turnstile": st.session_state.get('turnstile_token', ''),
-                    "session": get_session_cookie()  
-                }
-                
-                # Make streaming request
-                response = requests.post(
-                    BASE_URL,
-                    headers=headers,
-                    json=data,
-                    stream=True
-                )
-                
-                for line in response.iter_lines():
-                    if line:
-                        # Remove "data: " prefix and parse JSON
-                        line = line.decode('utf-8')
-                        if line.startswith("data: "):
-                            line = line[6:]  # Remove "data: " prefix
-                        if line != "[DONE]":
-                            try:
-                                json_object = json.loads(line)
-                                content = json_object['choices'][0]['delta'].get('content', '')
-                                full_response += content
-                                # Process math in streaming response
-                                message_placeholder.markdown(full_response + "▌", unsafe_allow_html=True)
-                            except json.JSONDecodeError:
-                                continue
-                
-                message_placeholder.markdown(full_response)
-                st.session_state.messages.append({"role": "assistant", "content": full_response})
-                
-            except Exception as e:
-                st.error(f"Error: {str(e)}")
 
 #pushkarsingh4343@gmail.com
 #python -m streamlit run chatui.py
