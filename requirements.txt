@@ -1,5 +1,5 @@
 streamlit
 requests
 pandas
-python-docx2txt
+docx2txt
 PyPDF2
