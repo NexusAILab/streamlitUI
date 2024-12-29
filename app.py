@@ -9,6 +9,7 @@ import docx2txt
 import PyPDF2
 import streamlit.components.v1 as components
 import time
+from streamlit_cookies_controller import CookieController
 
 # Replace OpenAI configs with base URL and API key constants
 BASE_URL = "https://api.nexusmind.tech/nexus/v3/chat/completions"
@@ -82,23 +83,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# Add JavaScript message handler for cookies
-components.html(
-    """
-    <script>
-        // Listen for messages from the cookie script
-        window.addEventListener('message', function(event) {
-            if (event.data.type === 'session_cookie') {
-                // Store the cookie value in Streamlit's session state
-                window.parent.Streamlit.setComponentValue(event.data.cookie);
-            }
-        });
-    </script>
-    """,
-    height=0,
-    width=0
-)
 
 # Initialize session states
 if "messages" not in st.session_state:
@@ -285,35 +269,8 @@ uploaded_file = st.file_uploader(
 # Add this function near the top of your file after imports
 def get_session_cookie():
     try:
-        # Create a container for the cookie value
-        cookie_container = st.empty()
-        
-        # Inject JavaScript to get the cookie
-        components.html(
-            """
-            <script>
-                function getCookie(name) {
-                    const value = `; ${document.cookie}`;
-                    const parts = value.split(`; ${name}=`);
-                    if (parts.length === 2) return parts.pop().split(';').shift();
-                    return '';
-                }
-                
-                // Get the session_id cookie
-                const sessionId = getCookie('session_id');
-                
-                // Send it to Streamlit
-                window.parent.postMessage({
-                    type: 'session_cookie',
-                    cookie: sessionId
-                }, '*');
-            </script>
-            """,
-            height=0,
-            width=0
-        )
-        
-        return ''  # Initial return, the actual value will be handled via callback
+        controller = CookieController()
+        return controller.get('session_id') or ''
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
         return ''
@@ -378,6 +335,15 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
         }
     </style>
+""", unsafe_allow_html=True)
+
+# Add this style to hide the cookie controller iframe
+st.markdown("""
+<style>
+    div[data-testid='element-container']:has(iframe[title='streamlit_cookies_controller.cookie_controller.cookie_controller']){
+        display:none;
+    }
+</style>
 """, unsafe_allow_html=True)
 
 # Modify the chat input section (replace the existing if prompt block)
