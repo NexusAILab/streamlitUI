@@ -1,0 +1,5 @@
+streamlit
+requests
+pandas
+python-docx2txt
+PyPDF2
