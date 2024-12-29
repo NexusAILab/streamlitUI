@@ -10,7 +10,7 @@ import PyPDF2
 import streamlit.components.v1 as components
 
 # Replace OpenAI configs with base URL and API key constants
-BASE_URL = "https://api.nexusmind.tech/v1/chat/completions"
+BASE_URL = "https://api.nexusmind.tech/v3/chat/completions"
 API_KEY = "nexusai"
 
 # Page config
@@ -192,29 +192,22 @@ def verify_turnstile_token(token):
         session = get_session_cookie()
         response = requests.post(
             f"{BASE_URL}/verify-turnstile",
-            json={
-                "token": token,
-                "session": session  # Use session from cookie
-            },
-            headers={"Content-Type": "application/json"}
+            json={"token": token, "session": session},
+            headers={"Content-Type": "application/json"},
+            timeout=10  # Add timeout
         )
-        if response.status_code == 200:
-            result = response.json()
-            if result.get("success"):
-                st.session_state.turnstile_token = result.get("token")
-                return True
-        return False
+        return response.status_code == 200 and response.json().get("success", False)
     except Exception as e:
-        st.error(f"Error verifying Turnstile token: {str(e)}")
+        st.warning(f"Turnstile verification error: {str(e)}")
         return False
 
 # Add this function near the top of your file after imports
 def get_session_cookie():
-    # Get all cookies from the current browser session
     try:
         cookies = st.experimental_get_query_params()
-        return cookies.get('session', [''])[0]
-    except:
+        return cookies.get('session_id', [''])[0]
+    except Exception as e:
+        st.warning(f"Session cookie error: {str(e)}")
         return ''
 
 # Modify the chat input section (replace the existing if prompt block)
