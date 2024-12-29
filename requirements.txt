@@ -4,3 +4,4 @@ pandas
 docx2txt
 PyPDF2
 streamlit-js-eval
+streamlit-cookies-controller
