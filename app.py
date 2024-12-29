@@ -218,24 +218,18 @@ def get_session_cookie():
         st.warning(f"Session cookie error: {str(e)}")
         return ''
 
-
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        process_content(message["content"])
-
 # Main chat interface
 st.title("Nexus ChatGPT")
 
 # Show Turnstile verification before chat interface
 if handle_turnstile_verification():
+    # File uploader
+    uploaded_file = st.file_uploader("Upload a file (PDF, TXT, DOCX, CSV, etc.) - Max 10 MB", type=['txt', 'pdf', 'docx', 'csv'])
+
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             process_content(message["content"])
-
-    # Add file uploader with size warning
-    uploaded_file = st.file_uploader("Upload a file (PDF, TXT, DOCX, CSV, etc.) - Max 10 MB", type=['txt', 'pdf', 'docx', 'csv'])
 
     # Chat input
     if prompt := st.chat_input("What would you like to know?"):
