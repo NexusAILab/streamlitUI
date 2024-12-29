@@ -21,8 +21,8 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "turnstile_token" not in st.session_state:
-    st.session_state.turnstile_token = None
+if "turnstile_verified" not in st.session_state:
+    st.session_state.turnstile_verified = False
 
 # System prompt
 SYSTEM_PROMPT = """You are a helpful AI assistant. You aim to give accurate, informative responses while being direct and concise. For mathematical or technical topics, you provide clear explanations with examples when helpful."""
@@ -70,8 +70,20 @@ with st.sidebar:
             st.session_state.messages = chat['messages'].copy()
             st.rerun()
 
+# Add this handler function for Turnstile verification
+def handle_turnstile_verification():
+    if not st.session_state.turnstile_verified:
+        st.write("Please complete the verification below:")
+        turnstile_widget()
+        return False
+    return True
+
 # Main chat interface
 st.title("Nexus ChatGPT")
+
+# Show Turnstile verification before chat interface
+if not handle_turnstile_verification():
+    st.stop()  # Stop execution until verification is complete
 
 def clean_math_expression(expr):
     # Replace [...] line breaks with actual line breaks
@@ -175,6 +187,11 @@ def turnstile_widget():
                 type: 'turnstile-token',
                 token: token
             }, '*');
+            
+            // Reload the page after successful verification
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
         }
         window.onload = function() {
             turnstile.ready(function() {
@@ -196,7 +213,10 @@ def verify_turnstile_token(token):
             headers={"Content-Type": "application/json"},
             timeout=10  # Add timeout
         )
-        return response.status_code == 200 and response.json().get("success", False)
+        if response.status_code == 200 and response.json().get("success", False):
+            st.session_state.turnstile_verified = True  # Set verification state
+            return True
+        return False
     except Exception as e:
         st.warning(f"Turnstile verification error: {str(e)}")
         return False
@@ -212,13 +232,8 @@ def get_session_cookie():
 
 # Modify the chat input section (replace the existing if prompt block)
 if prompt := st.chat_input("What would you like to know?"):
-    # Get Turnstile token from session state
-    turnstile_token = st.session_state.get('turnstile_token', '')
-    
-    if not turnstile_token:
-        st.error("Please complete the Turnstile verification")
-        turnstile_widget()
-    else:
+    # Handle the chat input only if Turnstile is verified
+    if st.session_state.turnstile_verified:
         # If there's a file, combine file content with the prompt
         if uploaded_file is not None:
             file_content = process_file_content(uploaded_file)
@@ -246,7 +261,7 @@ if prompt := st.chat_input("What would you like to know?"):
                     ],
                     "temperature": 0.7,
                     "stream": True,
-                    "turnstile": turnstile_token,
+                    "turnstile": st.session_state.get('turnstile_token', ''),
                     "session": get_session_cookie()  
                 }
                 
