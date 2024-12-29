@@ -11,7 +11,7 @@ import streamlit.components.v1 as components
 import time
 
 # Replace OpenAI configs with base URL and API key constants
-BASE_URL = "https://api.nexusmind.tech/v3/chat/completions"
+BASE_URL = "https://api.nexusmind.tech/nexus/v3/chat/completions"
 #BASE_URL = "https://helixmind.online/v1/chat/completions"
 API_KEY = "xxx"
 
