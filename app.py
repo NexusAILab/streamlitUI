@@ -279,9 +279,9 @@ def needs_captcha_verification():
     return (not st.session_state.captcha_verified or 
             current_time - st.session_state.last_captcha_time > CAPTCHA_SESSION_DURATION)
 
-# Add the Turnstile widget HTML before the main chat interface
+# Modify the Turnstile widget implementation to ensure proper loading
 if needs_captcha_verification():
-    st.markdown("""
+    components.html("""
         <div class="captcha-overlay">
             <div class="captcha-container">
                 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
@@ -292,49 +292,48 @@ if needs_captcha_verification():
             </div>
         </div>
         <script>
+            window.onload = function() {{
+                if (typeof turnstile === 'undefined') {{
+                    console.error('Turnstile not loaded');
+                    return;
+                }}
+                turnstile.render('#cf-turnstile');
+            }};
+            
             function onCaptchaSuccess(token) {{
-                fetch('/verify-turnstile', {{
-                    method: 'POST',
-                    headers: {{'Content-Type': 'application/json'}},
-                    body: JSON.stringify({{
-                        token: token,
-                        session: new URLSearchParams(window.location.search).get('session_id')
-                    }})
-                }})
-                .then(response => response.json())
-                .then(data => {{
-                    if (data.success) {{
-                        window.location.reload();
-                    }}
-                }});
+                console.log('Captcha success:', token);
+                window.parent.postMessage({{
+                    type: 'captcha_success',
+                    token: token
+                }}, '*');
             }}
         </script>
-    """.format(TURNSTILE_SITE_KEY), unsafe_allow_html=True)
+    """.format(TURNSTILE_SITE_KEY), height=400)
 
-    # Add overlay styling
-    st.markdown("""
-        <style>
-            .captcha-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: rgba(0, 0, 0, 0.5);
-                z-index: 9999;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-            }
-            
-            .captcha-container {
-                background-color: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-            }
-        </style>
-    """, unsafe_allow_html=True)
+# Add overlay styling
+st.markdown("""
+    <style>
+        .captcha-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .captcha-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Modify the chat input section (replace the existing if prompt block)
 if prompt := st.chat_input("What would you like to know?"):
