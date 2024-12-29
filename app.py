@@ -70,7 +70,34 @@ with st.sidebar:
             st.session_state.messages = chat['messages'].copy()
             st.rerun()
 
-# Add this handler function for Turnstile verification
+# Move the turnstile_widget function definition before handle_turnstile_verification
+def turnstile_widget():
+    components.html(
+        """
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+        <div class="cf-turnstile" data-sitekey="0x4AAAAAAAzRsaZd0P9-qFot" data-callback="onTurnstileSuccess"></div>
+        <script>
+        function onTurnstileSuccess(token) {
+            window.parent.postMessage({
+                type: 'turnstile-token',
+                token: token
+            }, '*');
+            
+            setTimeout(function() {
+                window.location.reload();
+            }, 1000);
+        }
+        window.onload = function() {
+            turnstile.ready(function() {
+                turnstile.render('.cf-turnstile');
+            });
+        }
+        </script>
+        """,
+        height=100
+    )
+
+# Now define handle_turnstile_verification
 def handle_turnstile_verification():
     if not st.session_state.turnstile_verified:
         st.write("Please complete the verification below:")
@@ -173,35 +200,6 @@ for message in st.session_state.messages:
 
 # Add file uploader with size warning
 uploaded_file = st.file_uploader("Upload a file (PDF, TXT, DOCX, CSV, etc.) - Max 10 MB", type=['txt', 'pdf', 'docx', 'csv'])
-
-# Custom component for Cloudflare Turnstile
-def turnstile_widget():
-    components.html(
-        """
-        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-        <div class="cf-turnstile" data-sitekey="0x4AAAAAAAzRsaZd0P9-qFot" data-callback="onTurnstileSuccess"></div>
-        <script>
-        function onTurnstileSuccess(token) {
-            // Send token to Streamlit
-            window.parent.postMessage({
-                type: 'turnstile-token',
-                token: token
-            }, '*');
-            
-            // Reload the page after successful verification
-            setTimeout(function() {
-                window.location.reload();
-            }, 1000);
-        }
-        window.onload = function() {
-            turnstile.ready(function() {
-                turnstile.render('.cf-turnstile');
-            });
-        }
-        </script>
-        """,
-        height=100
-    )
 
 # Add this function to verify the token with the backend
 def verify_turnstile_token(token):
