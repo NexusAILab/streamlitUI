@@ -270,6 +270,8 @@ uploaded_file = st.file_uploader(
 def get_session_cookie():
     try:
         controller = CookieController()
+        cookies = controller.getAll()
+        print(cookies)
         return controller.get('session_id') or ''
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
