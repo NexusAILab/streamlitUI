@@ -100,16 +100,10 @@ def handle_turnstile_callback():
         <script>
         window.addEventListener('message', function(e) {
             if (e.data.type === 'turnstile-token') {
-                // Use Streamlit's setQueryParam to persist the verification
-                const searchParams = new URLSearchParams(window.location.search);
-                searchParams.set('turnstile_verified', 'true');
-                const newRelativePathQuery = window.location.pathname + '?' + searchParams.toString();
-                history.pushState(null, '', newRelativePathQuery);
-                
-                // Reload only if not already verified
-                if (!searchParams.has('turnstile_verified')) {
-                    window.location.reload();
-                }
+                // Store token in sessionStorage
+                sessionStorage.setItem('turnstile_token', e.data.token);
+                // Reload the page
+                window.location.reload();
             }
         });
         </script>
@@ -119,17 +113,116 @@ def handle_turnstile_callback():
 
 # Modify the handle_turnstile_verification function
 def handle_turnstile_verification():
-    # Check URL parameters for verification status using st.query_params
+    # Check if we have a token in session state
+    if st.session_state.get('turnstile_verified'):
+        return True
+    
+    # Add JavaScript to check for token in sessionStorage
+    components.html(
+        """
+        <script>
+        const token = sessionStorage.getItem('turnstile_token');
+        if (token) {
+            // Clear the token
+            sessionStorage.removeItem('turnstile_token');
+            // Set verification status in URL
+            const searchParams = new URLSearchParams(window.location.search);
+            searchParams.set('turnstile_verified', 'true');
+            const newRelativePathQuery = window.location.pathname + '?' + searchParams.toString();
+            history.pushState(null, '', newRelativePathQuery);
+            // Reload the page
+            window.location.reload();
+        }
+        </script>
+        """,
+        height=0
+    )
+    
+    # Check URL parameters for verification status
     if st.query_params.get('turnstile_verified') == 'true':
         st.session_state.turnstile_verified = True
         return True
     
-    if not st.session_state.turnstile_verified:
-        st.write("Please complete the verification below:")
-        turnstile_widget()
-        handle_turnstile_callback()
-        return False
-    return True
+    # Show verification widget if not verified
+    st.write("Please complete the verification below:")
+    turnstile_widget()
+    handle_turnstile_callback()
+    return False
+
+def process_content(content):
+    # Split into sentences (roughly)
+    sentences = re.split(r'(?<=[.!?])\s+', content)
+    
+    for sentence in sentences:
+        # Look for math expressions in each sentence
+        parts = re.split(r'(\$\$.*?\$\$|\$.*?\$|\[.*?\]|\(.*?\))', sentence)
+        
+        formatted_parts = []
+        for part in parts:
+            if part:
+                if part.startswith('[') and part.endswith(']'):
+                    # Display math
+                    cleaned_math = clean_math_expression(part)
+                    st.latex(cleaned_math)
+                elif part.startswith('(') and part.endswith(')'):
+                    # Inline math
+                    cleaned_math = clean_math_expression(part[1:-1])
+                    st.latex(cleaned_math)
+                elif part.strip():
+                    # Regular text
+                    st.write(part.strip())
+
+def process_file_content(uploaded_file):
+    """Process different types of uploaded files and return their content as text."""
+    # Add file size check (10 MB limit)
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB in bytes
+    
+    if uploaded_file.size > MAX_FILE_SIZE:
+        return "File is too large. Please upload a file smaller than 10 MB."
+    
+    file_type = uploaded_file.name.split('.')[-1].lower()
+    
+    try:
+        if file_type == 'txt':
+            # Text files
+            return uploaded_file.getvalue().decode('utf-8')
+            
+        elif file_type == 'pdf':
+            # PDF files
+            pdf_reader = PyPDF2.PdfReader(uploaded_file)
+            text = ''
+            for page in pdf_reader.pages:
+                text += page.extract_text() + '\n'
+            return text
+            
+        elif file_type == 'docx':
+            # Word documents
+            return docx2txt.process(uploaded_file)
+            
+        elif file_type == 'csv':
+            # CSV files
+            df = pd.read_csv(uploaded_file)
+            return df.to_string()
+            
+        else:
+            return "Unsupported file type"
+            
+    except Exception as e:
+        return f"Error processing file: {str(e)}"
+
+def get_session_cookie():
+    try:
+        cookies = st.experimental_get_query_params()
+        return cookies.get('session_id', [''])[0]
+    except Exception as e:
+        st.warning(f"Session cookie error: {str(e)}")
+        return ''
+
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        process_content(message["content"])
 
 # Main chat interface
 st.title("Nexus ChatGPT")
