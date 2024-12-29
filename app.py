@@ -9,7 +9,7 @@ import docx2txt
 import PyPDF2
 import streamlit.components.v1 as components
 import time
-from streamlit_cookies_controller import CookieController
+import extra_streamlit_components as stx
 
 # Replace OpenAI configs with base URL and API key constants
 BASE_URL = "https://api.nexusmind.tech/nexus/v3/chat/completions"
@@ -269,10 +269,8 @@ uploaded_file = st.file_uploader(
 # Add this function near the top of your file after imports
 def get_session_cookie():
     try:
-        controller = CookieController()
-        cookies = controller.getAll()
-        print(cookies)
-        return controller.get('session_id') or ''
+        cookie_manager = stx.CookieManager()
+        return cookie_manager.get('session_id') or ''
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
         return ''
@@ -337,15 +335,6 @@ st.markdown("""
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
         }
     </style>
-""", unsafe_allow_html=True)
-
-# Add this style to hide the cookie controller iframe
-st.markdown("""
-<style>
-    div[data-testid='element-container']:has(iframe[title='streamlit_cookies_controller.cookie_controller.cookie_controller']){
-        display:none;
-    }
-</style>
 """, unsafe_allow_html=True)
 
 # Modify the chat input section (replace the existing if prompt block)
