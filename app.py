@@ -303,33 +303,39 @@ if needs_captcha_verification():
                     data-callback="onTurnstileCallback">
                 </div>
             </div>
-            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async defer></script>
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
             <script>
-                window.onTurnstileCallback = function(token) {{
-                    window.parent.postMessage({{
-                        token: token
-                    }}, '*');
-                }};
-                
-                window.onloadTurnstileCallback = function() {{
-                    console.log('Turnstile loaded');
-                }};
+                function onTurnstileCallback(token) {{
+                    const data = {{
+                        type: 'streamlit:setComponentValue',
+                        value: token
+                    }};
+                    window.parent.postMessage(data, '*');
+                    
+                    // Also store in localStorage as backup
+                    localStorage.setItem('turnstile_token', token);
+                }}
             </script>
         </body>
         </html>
     """
     
-    components.html(
-        turnstile_html,
-        height=200,
-        scrolling=False
-    )
+    # Create a container for the turnstile widget
+    turnstile_container = st.empty()
+    with turnstile_container:
+        components.html(
+            turnstile_html,
+            height=200,
+            scrolling=False
+        )
 
-    # Listen for the token in session state
-    if 'turnstile_response' in st.session_state:
-        st.session_state.turnstile_token = st.session_state.turnstile_response
+    # Check for the token in component value
+    if "turnstile_response" in st.session_state:
+        token = st.session_state.turnstile_response
+        st.session_state.turnstile_token = token
         st.session_state.captcha_verified = True
         st.session_state.last_captcha_time = time.time()
+        turnstile_container.empty()  # Remove the widget once verified
         st.rerun()
 
 # Modify the chat input section (replace the existing if prompt block)
@@ -418,5 +424,8 @@ if prompt := st.chat_input("What would you like to know?"):
             st.session_state.error_message = f"Error: {str(e)}"
             st.rerun()
 
+# Add debug logging
+print("Debug - Turnstile token:", st.session_state.get("turnstile_token"))
+print("Debug - Session cookie:", get_session_cookie())
 
 #python -m streamlit run app.py
