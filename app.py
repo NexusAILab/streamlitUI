@@ -303,16 +303,9 @@ if needs_captcha_verification():
             </div>
         </div>
         <script>
-            window.onload = function() {{
-                if (typeof turnstile === 'undefined') {{
-                    console.error('Turnstile not loaded');
-                    return;
-                }}
-                turnstile.render('#cf-turnstile');
-            }};
-            
             function onCaptchaSuccess(token) {{
                 console.log('Captcha success:', token);
+                // Store token in session state via Streamlit
                 window.parent.postMessage({{
                     type: 'captcha_success',
                     token: token
@@ -320,6 +313,28 @@ if needs_captcha_verification():
             }}
         </script>
     """.format(TURNSTILE_SITE_KEY), height=400)
+
+    # Add event listener for Turnstile token
+    turnstile_token = st.empty()
+    components.html("""
+        <script>
+            window.addEventListener('message', function(e) {
+                if (e.data.type === 'captcha_success') {
+                    window.parent.postMessage({
+                        type: 'streamlit:setComponentValue',
+                        value: e.data.token
+                    }, '*');
+                }
+            });
+        </script>
+    """)
+    
+    # Update session state when token is received
+    if turnstile_token:
+        st.session_state.turnstile_token = turnstile_token
+        st.session_state.captcha_verified = True
+        st.session_state.last_captcha_time = time.time()
+        st.rerun()
 
 # Add overlay styling
 st.markdown("""
