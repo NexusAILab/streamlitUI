@@ -284,11 +284,38 @@ def get_session_cookie():
         st.warning(f"Session cookie error: {str(e)}")
         return ''
 
-# Add this function to check if captcha needs to be shown
+# Read query parameters to capture the turnstile_token
+query_params = st.query_params
+if 'turnstile_token' in query_params:
+    st.session_state.turnstile_token = query_params['turnstile_token'][0]
+    st.session_state.captcha_verified = True
+    st.session_state.last_captcha_time = time.time()
+    # Optionally, remove the token from the URL to clean up
+    st.set_query_params(**{k: v for k, v in query_params.items() if k != 'turnstile_token'})
+
+# Check if captcha needs to be verified
 def needs_captcha_verification():
     current_time = time.time()
     return (not st.session_state.captcha_verified or 
             current_time - st.session_state.last_captcha_time > CAPTCHA_SESSION_DURATION)
+
+# Define a custom component to listen for postMessages
+def listen_for_turnstile():
+    listen_html = """
+    <script>
+        window.addEventListener("message", (event) => {
+            if (event.data.type === "set_turnstile_token") {
+                const token = event.data.value;
+                // Send the token back to Streamlit
+                window.parent.postMessage({type: "TURNSTILE_TOKEN", token: token}, "*");
+            }
+        });
+    </script>
+    """
+    components.html(listen_html)
+
+# Call the function to set up the listener
+listen_for_turnstile()
 
 # Modify the Turnstile widget implementation
 if needs_captcha_verification():
@@ -306,16 +333,20 @@ if needs_captcha_verification():
             <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
             <script>
                 function onTurnstileCallback(token) {{
-                    const data = {{
-                        type: 'streamlit:setComponentValue',
-                        value: token
-                    }};
-                    window.parent.postMessage(data, '*');
-                    
-                    // Also store in localStorage as backup
-                    localStorage.setItem('turnstile_token', token);
+                    // Assign the token to a hidden input field
+                    const tokenInput = document.getElementById('turnstile_token');
+                    if (tokenInput) {{
+                        tokenInput.value = token;
+                        // Trigger a Streamlit rerun by interacting with the DOM
+                        window.parent.postMessage({{
+                            type: 'set_turnstile_token',
+                            value: token
+                        }}, '*');
+                    }}
                 }}
             </script>
+            <!-- Hidden input to store the token -->
+            <input type="hidden" id="turnstile_token" value="">
         </body>
         </html>
     """
