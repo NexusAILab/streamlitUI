@@ -11,15 +11,7 @@ import streamlit.components.v1 as components
 import time
 import extra_streamlit_components as stx
 import datetime
-
-# Define the debug_token_status function before it's used
-def debug_token_status():
-    print("=== Debug Token Status ===")
-    print(f"Turnstile Component Value: {st.session_state.get('turnstile_component')}")
-    print(f"Turnstile Token: {st.session_state.get('turnstile_token')}")
-    print(f"Captcha Verified: {st.session_state.get('captcha_verified')}")
-    print(f"Last Captcha Time: {st.session_state.get('last_captcha_time')}")
-    print("=======================")
+from streamlit_javascript import st_javascript
 
 # Set page config first, before any other Streamlit commands
 st.set_page_config(
@@ -28,6 +20,14 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize session state variables
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "error_message" not in st.session_state:
+    st.session_state.error_message = None
 
 print("===============")
 # Remove the @st.cache_resource decorator and modify the cookie management
@@ -42,10 +42,6 @@ print("===============")
 BASE_URL = "https://api.nexusmind.tech/nexus/v3/chat/completions"
 #BASE_URL = "https://helixmind.online/v1/chat/completions"
 API_KEY = "xxx"
-
-# Add these constants near the top with other constants
-TURNSTILE_SITE_KEY = "0x4AAAAAAAzRsaZd0P9-qFot"
-CAPTCHA_SESSION_DURATION = 300  # 5 minutes in seconds
 
 # Then add CSS customizations
 st.markdown("""
@@ -103,23 +99,32 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session states
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "turnstile_token" not in st.session_state:
-    st.session_state.turnstile_token = None
-if "show_sidebar" not in st.session_state:
-    st.session_state.show_sidebar = False
-if "error_message" not in st.session_state:
-    st.session_state.error_message = None
-if "last_captcha_time" not in st.session_state:
-    st.session_state.last_captcha_time = 0
-if "captcha_verified" not in st.session_state:
-    st.session_state.captcha_verified = False
-if "turnstile_component" not in st.session_state:
-    st.session_state.turnstile_component = None
+# Add reCAPTCHA script
+components.html(
+    """
+    <script src="https://www.google.com/recaptcha/api.js"></script>
+    <div class="g-recaptcha" data-sitekey="6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup" data-callback="onRecaptchaSuccess" data-error-callback="onRecaptchaError"></div>
+    <script>
+    function onRecaptchaSuccess() {
+        console.log('reCAPTCHA completed successfully');
+    }
+    
+    function onRecaptchaError() {
+        console.log('reCAPTCHA error occurred');
+    }
+    
+    function getReCaptchaToken() {
+        try {
+            return grecaptcha.getResponse() || '';
+        } catch (error) {
+            console.error('reCAPTCHA error:', error);
+            return '';
+        }
+    }
+    </script>
+    """,
+    height=100
+)
 
 # System prompt
 SYSTEM_PROMPT = """You are a helpful AI assistant. You aim to give accurate, informative responses while being direct and concise."""
@@ -287,102 +292,13 @@ uploaded_file = st.file_uploader(
     help="Upload a file to analyze or discuss with the AI"
 )
 
-# Add this function near the top of your file after imports
+# Modify get_session_cookie function to be simpler
 def get_session_cookie():
     try:
         return session_id or ''
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
         return ''
-
-# Read query parameters to capture the turnstile_token
-query_params = st.query_params
-if 'turnstile_token' in query_params:
-    st.session_state.turnstile_token = query_params['turnstile_token'][0]
-    st.session_state.captcha_verified = True
-    st.session_state.last_captcha_time = time.time()
-    # Optionally, remove the token from the URL to clean up
-    st.set_query_params(**{k: v for k, v in query_params.items() if k != 'turnstile_token'})
-
-# Check if captcha needs to be verified
-def needs_captcha_verification():
-    current_time = time.time()
-    return (not st.session_state.captcha_verified or 
-            current_time - st.session_state.last_captcha_time > CAPTCHA_SESSION_DURATION)
-
-# Define a custom component to listen for postMessages
-def listen_for_turnstile():
-    listen_html = """
-    <script>
-        window.addEventListener("message", (event) => {
-            if (event.data.type === "set_turnstile_token") {
-                const token = event.data.value;
-                // Send the token back to Streamlit
-                window.parent.postMessage({type: "TURNSTILE_TOKEN", token: token}, "*");
-            }
-        });
-    </script>
-    """
-    components.html(listen_html)
-
-# Call the function to set up the listener
-listen_for_turnstile()
-
-# Modify the Turnstile widget implementation
-if needs_captcha_verification():
-    st.markdown("### Please complete the verification")
-    
-    def create_turnstile_component():
-        turnstile_html = f"""
-        <html>
-        <body>
-            <div class="cf-turnstile" 
-                data-sitekey="{TURNSTILE_SITE_KEY}"
-                data-callback="onTurnstileCallback">
-            </div>
-            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-            <script>
-                // Create a custom event handler
-                window.addEventListener('load', function() {{
-                    window.captchaCallback = function(token) {{
-                        // Send token directly to Streamlit
-                        const data = {{
-                            token: token,
-                            timestamp: Date.now()
-                        }};
-                        window.parent.postMessage({{
-                            type: "streamlit:set_component_value",
-                            data: data
-                        }}, "*");
-                    }};
-                }});
-
-                function onTurnstileCallback(token) {{
-                    window.captchaCallback(token);
-                }}
-            </script>
-        </body>
-        </html>
-        """
-        return components.html(
-            turnstile_html,
-            height=100
-        )
-
-    # Create a container for the turnstile widget
-    turnstile_container = st.empty()
-    with turnstile_container:
-        turnstile_response = create_turnstile_component()
-    
-    # Handle the verification
-    if "turnstile_component" in st.session_state and st.session_state.turnstile_component:
-        token_data = st.session_state.turnstile_component
-        if isinstance(token_data, dict) and 'token' in token_data:
-            st.session_state.turnstile_token = token_data['token']
-            st.session_state.captcha_verified = True
-            st.session_state.last_captcha_time = time.time()
-            st.success("Verification successful!")
-            st.rerun()
 
 # Modify the chat input section (replace the existing if prompt block)
 if prompt := st.chat_input("What would you like to know?"):
@@ -406,10 +322,12 @@ if prompt := st.chat_input("What would you like to know?"):
             }
             
             def prepare_api_payload(messages, model, system_prompt):
-                token = st.session_state.get("turnstile_token")
-                if not token:
-                    raise ValueError("Captcha token is missing or invalid")
-                    
+                try:
+                    recaptcha_token = st_javascript("grecaptcha.getResponse()")
+                except Exception as e:
+                    print(f"reCAPTCHA error: {str(e)}")
+                    recaptcha_token = ''
+                
                 return {
                     "model": model,
                     "messages": [
@@ -418,8 +336,8 @@ if prompt := st.chat_input("What would you like to know?"):
                     ],
                     "temperature": 0.7,
                     "stream": True,
-                    "turnstile_token": token,
-                    "session": get_session_cookie()
+                    "session": get_session_cookie(),
+                    "token": recaptcha_token
                 }
 
             # Update the API request section
@@ -430,8 +348,6 @@ if prompt := st.chat_input("What would you like to know?"):
                     system_prompt
                 )
                 
-                debug_token_status()  # Log token status before request
-                
                 response = requests.post(
                     BASE_URL,
                     headers=headers,
@@ -439,13 +355,6 @@ if prompt := st.chat_input("What would you like to know?"):
                     stream=True,
                     timeout=30
                 )
-                
-                # Add response debugging
-                if response.status_code != 200:
-                    print("=== API Error ===")
-                    print(f"Status Code: {response.status_code}")
-                    print(f"Response: {response.text}")
-                    print("================")
                 
                 for line in response.iter_lines():
                     if line:
@@ -492,42 +401,4 @@ if prompt := st.chat_input("What would you like to know?"):
             st.session_state.error_message = f"Error: {str(e)}"
             st.rerun()
 
-# Add debug logging
-print("Debug - Turnstile token:", st.session_state.get("turnstile_token"))
-print("Debug - Session cookie:", get_session_cookie())
-
-# Add near the top of your file after imports
-def handle_captcha_verification():
-    if "turnstile_component" in st.session_state:
-        component_value = st.session_state.turnstile_component
-        if isinstance(component_value, dict) and 'token' in component_value:
-            st.session_state.turnstile_token = component_value['token']
-            st.session_state.captcha_verified = True
-            st.session_state.last_captcha_time = time.time()
-            return True
-    return False
-
-# Update the captcha verification section
-if needs_captcha_verification():
-    st.markdown("### Please complete the verification")
-    
-    # Create a unique key for the container
-    turnstile_container = st.empty()
-    with turnstile_container:
-        # Create the turnstile component without key parameter
-        turnstile_response = create_turnstile_component()
-    
-    # Handle the verification
-    if "turnstile_component" in st.session_state and st.session_state.turnstile_component:
-        token_data = st.session_state.turnstile_component
-        if isinstance(token_data, dict) and 'token' in token_data:
-            st.session_state.turnstile_token = token_data['token']
-            st.session_state.captcha_verified = True
-            st.session_state.last_captcha_time = time.time()
-            st.success("Verification successful!")
-            st.rerun()
-
-# Add this before making the API request
-debug_token_status()
-
-#python -m streamlit run app.py
+#python -m streamlit run chatui.py
