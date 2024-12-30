@@ -1,5 +1,5 @@
 import streamlit as st
-from datetime import datetime
+from datetime import datetime as dt
 import requests
 import json
 import re
@@ -139,7 +139,7 @@ with st.sidebar:
         if st.button("📝 New Chat", use_container_width=True):
             # Save current chat to history if it exists
             if st.session_state.messages:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 # Get the first user message for preview, defaulting to "New Chat" if none exists
                 preview = "New Chat"
                 for msg in st.session_state.messages:
