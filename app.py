@@ -292,44 +292,42 @@ def needs_captcha_verification():
 
 # Modify the Turnstile widget implementation
 if needs_captcha_verification():
-    st.markdown("""
-        <style>
-            .captcha-overlay {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background-color: white;
-                padding: 20px;
-                border-radius: 10px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-                z-index: 9999;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    with st.container():
-        components.html(f"""
-            <div class="captcha-overlay">
-                <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    st.markdown("### Please complete the verification")
+    
+    turnstile_html = f"""
+        <html>
+        <body>
+            <div style="display: flex; justify-content: center; margin: 20px 0;">
                 <div class="cf-turnstile" 
                     data-sitekey="{TURNSTILE_SITE_KEY}"
-                    data-callback="onCaptchaSuccess"></div>
+                    data-callback="onTurnstileCallback">
+                </div>
             </div>
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async defer></script>
             <script>
-                function onCaptchaSuccess(token) {{
+                window.onTurnstileCallback = function(token) {{
                     window.parent.postMessage({{
-                        type: 'streamlit:setComponentValue',
-                        value: token
+                        token: token
                     }}, '*');
-                }}
+                }};
+                
+                window.onloadTurnstileCallback = function() {{
+                    console.log('Turnstile loaded');
+                }};
             </script>
-        """, height=100)
+        </body>
+        </html>
+    """
+    
+    components.html(
+        turnstile_html,
+        height=200,
+        scrolling=False
+    )
 
-    # Handle the token reception
-    token = st.empty()
-    if token:
-        st.session_state.turnstile_token = token
+    # Listen for the token in session state
+    if 'turnstile_response' in st.session_state:
+        st.session_state.turnstile_token = st.session_state.turnstile_response
         st.session_state.captcha_verified = True
         st.session_state.last_captcha_time = time.time()
         st.rerun()
