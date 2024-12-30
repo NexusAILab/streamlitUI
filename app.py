@@ -102,28 +102,28 @@ st.markdown("""
 # Add reCAPTCHA script
 components.html(
     """
-    <script src="https://www.google.com/recaptcha/api.js"></script>
-    <div class="g-recaptcha" data-sitekey="6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup" data-callback="onRecaptchaSuccess" data-error-callback="onRecaptchaError"></div>
+    <script src="https://www.google.com/recaptcha/api.js?render=6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup"></script>
     <script>
-    function onRecaptchaSuccess() {
-        console.log('reCAPTCHA completed successfully');
+    function executeRecaptcha() {
+        grecaptcha.ready(function() {
+            grecaptcha.execute('6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup', {action: 'submit'})
+            .then(function(token) {
+                console.log('reCAPTCHA token obtained');
+            });
+        });
     }
-    
-    function onRecaptchaError() {
-        console.log('reCAPTCHA error occurred');
-    }
-    
+
     function getReCaptchaToken() {
         try {
-            return grecaptcha.getResponse() || '';
+            return grecaptcha.execute('6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup', {action: 'submit'});
         } catch (error) {
             console.error('reCAPTCHA error:', error);
-            return '';
+            return Promise.resolve('');
         }
     }
     </script>
     """,
-    height=100
+    height=0  # Reduced height since v3 is invisible
 )
 
 # System prompt
@@ -323,7 +323,9 @@ if prompt := st.chat_input("What would you like to know?"):
             
             def prepare_api_payload(messages, model, system_prompt):
                 try:
-                    recaptcha_token = st_javascript("grecaptcha.getResponse()")
+                    recaptcha_token = st_javascript("""
+                        await grecaptcha.execute('6Len-6kqAAAAABOogjdRl_UTTtLJQa4BowBi4lup', {action: 'submit'})
+                    """)
                 except Exception as e:
                     print(f"reCAPTCHA error: {str(e)}")
                     recaptcha_token = ''
