@@ -10,6 +10,24 @@ import PyPDF2
 import streamlit.components.v1 as components
 import time
 import extra_streamlit_components as stx
+import datetime
+
+# Set page config first, before any other Streamlit commands
+st.set_page_config(
+    page_title="Nexus ChatGPT",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+print("===============")
+# Remove the @st.cache_resource decorator and modify the cookie management
+cookie_manager = stx.CookieManager()
+cookies = cookie_manager.get_all()
+print("cookies", cookies)
+session_id = cookie_manager.get(cookie="session_id")
+print("session_id", session_id)
+print("===============")
 
 # Replace OpenAI configs with base URL and API key constants
 BASE_URL = "https://api.nexusmind.tech/nexus/v3/chat/completions"
@@ -19,14 +37,6 @@ API_KEY = "xxx"
 # Add these constants near the top with other constants
 TURNSTILE_SITE_KEY = "0x4AAAAAAAzRsaZd0P9-qFot"
 CAPTCHA_SESSION_DURATION = 300  # 5 minutes in seconds
-
-# Set page config first, before any other Streamlit commands
-st.set_page_config(
-    page_title="Nexus ChatGPT",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # Then add CSS customizations
 st.markdown("""
@@ -269,8 +279,7 @@ uploaded_file = st.file_uploader(
 # Add this function near the top of your file after imports
 def get_session_cookie():
     try:
-        cookie_manager = stx.CookieManager()
-        return cookie_manager.get('session_id') or ''
+        return session_id or ''
     except Exception as e:
         st.warning(f"Session cookie error: {str(e)}")
         return ''
@@ -376,10 +385,21 @@ if prompt := st.chat_input("What would you like to know?"):
                 headers=headers,
                 json=data,
                 stream=True,
-                timeout=30  # Add timeout
+                timeout=30
             )
-            response.raise_for_status()  # Raise exception for bad status codes
             
+            # Add error handling for non-200 status codes
+            if response.status_code != 200:
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get('error', {}).get('message', 'Unknown error occurred')
+                except:
+                    error_message = f"Server error: Status code {response.status_code}"
+                
+                st.error(error_message)
+                st.session_state.error_message = error_message
+                st.rerun()
+                
             for line in response.iter_lines():
                 if line:
                     # Remove "data: " prefix and parse JSON
@@ -400,11 +420,17 @@ if prompt := st.chat_input("What would you like to know?"):
             st.session_state.messages.append({"role": "assistant", "content": full_response})
             
         except requests.exceptions.Timeout:
+            st.error("Request timed out. Please try again.")
             st.session_state.error_message = "Request timed out. Please try again."
+            st.rerun()
         except requests.exceptions.RequestException as e:
+            st.error(f"Network error: {str(e)}")
             st.session_state.error_message = f"Network error: {str(e)}"
+            st.rerun()
         except Exception as e:
+            st.error(f"Error: {str(e)}")
             st.session_state.error_message = f"Error: {str(e)}"
+            st.rerun()
 
 
 #python -m streamlit run app.py
