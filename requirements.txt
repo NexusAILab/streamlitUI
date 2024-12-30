@@ -6,3 +6,4 @@ PyPDF2
 streamlit-js-eval
 streamlit-cookies-controller
 extra-streamlit-components
+streamlit-javascript
