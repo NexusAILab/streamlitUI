@@ -290,76 +290,49 @@ def needs_captcha_verification():
     return (not st.session_state.captcha_verified or 
             current_time - st.session_state.last_captcha_time > CAPTCHA_SESSION_DURATION)
 
-# Modify the Turnstile widget implementation to ensure proper loading
+# Modify the Turnstile widget implementation
 if needs_captcha_verification():
-    components.html("""
-        <div class="captcha-overlay">
-            <div class="captcha-container">
+    st.markdown("""
+        <style>
+            .captcha-overlay {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+                z-index: 9999;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        components.html(f"""
+            <div class="captcha-overlay">
                 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
                 <div class="cf-turnstile" 
-                    data-sitekey="{}"
-                    data-callback="onCaptchaSuccess"
-                    data-theme="light"></div>
+                    data-sitekey="{TURNSTILE_SITE_KEY}"
+                    data-callback="onCaptchaSuccess"></div>
             </div>
-        </div>
-        <script>
-            function onCaptchaSuccess(token) {{
-                console.log('Captcha success:', token);
-                // Store token in session state via Streamlit
-                window.parent.postMessage({{
-                    type: 'captcha_success',
-                    token: token
-                }}, '*');
-            }}
-        </script>
-    """.format(TURNSTILE_SITE_KEY), height=400)
-
-    # Add event listener for Turnstile token
-    turnstile_token = st.empty()
-    components.html("""
-        <script>
-            window.addEventListener('message', function(e) {
-                if (e.data.type === 'captcha_success') {
-                    window.parent.postMessage({
+            <script>
+                function onCaptchaSuccess(token) {{
+                    window.parent.postMessage({{
                         type: 'streamlit:setComponentValue',
-                        value: e.data.token
-                    }, '*');
-                }
-            });
-        </script>
-    """)
-    
-    # Update session state when token is received
-    if turnstile_token:
-        st.session_state.turnstile_token = turnstile_token
+                        value: token
+                    }}, '*');
+                }}
+            </script>
+        """, height=100)
+
+    # Handle the token reception
+    token = st.empty()
+    if token:
+        st.session_state.turnstile_token = token
         st.session_state.captcha_verified = True
         st.session_state.last_captcha_time = time.time()
         st.rerun()
-
-# Add overlay styling
-st.markdown("""
-    <style>
-        .captcha-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .captcha-container {
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-        }
-    </style>
-""", unsafe_allow_html=True)
 
 # Modify the chat input section (replace the existing if prompt block)
 if prompt := st.chat_input("What would you like to know?"):
